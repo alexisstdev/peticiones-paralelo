@@ -1,7 +1,8 @@
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
-from tqdm import tqdm
+import tkinter as tk
+from tkinter import scrolledtext, messagebox
 
 # Función para obtener datos meteorológicos de una ciudad
 def fetch_weather(city_name, api_key):
@@ -11,49 +12,71 @@ def fetch_weather(city_name, api_key):
     if response.status_code == 200:
         return response.json()
     else:
-        print(response.json())
         return {'error': f'Error al obtener el clima para {city_name}'}
 
 # Función para manejar la barra de progreso y las peticiones por lotes
-def realizar_peticiones_por_lotes(ciudades, api_key):
+def realizar_peticiones_por_lotes(ciudades, api_key, output_widget):
     total_peticiones = len(ciudades)
     tamano_lote = 5
 
-    # Barra de progreso general
-    with tqdm(total=total_peticiones, desc="Progreso General", unit="petición", colour='green') as progreso_general:
-        # Usar ThreadPoolExecutor para hacer peticiones en paralelo
-        with ThreadPoolExecutor(max_workers=tamano_lote) as ejecutor:
-            for i in range(0, total_peticiones, tamano_lote):
-                lote_ciudades = ciudades[i:i + tamano_lote]
-                futuros = [ejecutor.submit(fetch_weather, city, api_key) for city in lote_ciudades]
+    output_widget.delete(1.0, tk.END)  # Limpiar el widget de salida
 
-                tqdm.write(f"\n\033[94mProcesando lote {i // tamano_lote + 1}...\033[0m")  # Mensaje con color
+    # Usar ThreadPoolExecutor para hacer peticiones en paralelo
+    with ThreadPoolExecutor(max_workers=tamano_lote) as ejecutor:
+        for i in range(0, total_peticiones, tamano_lote):
+            lote_ciudades = ciudades[i:i + tamano_lote]
+            futuros = [ejecutor.submit(fetch_weather, city, api_key) for city in lote_ciudades]
 
-                # Barra de progreso individual para cada lote
-                with tqdm(total=len(lote_ciudades), desc=f"Progreso del Lote {i // tamano_lote + 1}", unit="petición", leave=False, colour='blue') as progreso_lote:
-                    resultados = []
-                    for futuro in as_completed(futuros):
-                        resultado = futuro.result()
-                        resultados.append(resultado)
-                        progreso_lote.update(1)
-                        progreso_general.update(1)
+            output_widget.insert(tk.END, f"\nProcesando lote {i // tamano_lote + 1}...\n")
+            output_widget.update_idletasks()  # Actualiza la interfaz para mostrar el mensaje de procesamiento
 
-                # Imprimir resultados del lote
-                for resultado in resultados:
-                    if 'name' in resultado:
-                        tqdm.write(f"\033[92m✔ Éxito:\033[0m Ciudad: {resultado['name']} | Clima: {resultado['weather'][0]['description']} | Temp: {resultado['main']['temp']}°C")
-                    else:
-                        tqdm.write(f"\033[91m✘ Error:\033[0m {resultado['error']}")
+            # Procesar resultados
+            for futuro in as_completed(futuros):
+                resultado = futuro.result()
+                if 'name' in resultado:
+                    output_widget.insert(tk.END, f"✔ Éxito: Ciudad: {resultado['name']} | Clima: {resultado['weather'][0]['description']} | Temp: {resultado['main']['temp']}°C\n")
+                else:
+                    output_widget.insert(tk.END, f"✘ Error: {resultado['error']}\n")
 
-                time.sleep(1)  # Pausa para mejor visualización entre lotes
+            output_widget.see(tk.END)  # Desplazarse hacia abajo
+            output_widget.update_idletasks()  # Actualizar la interfaz
 
-if __name__ == "__main__":
-    # Lista de ciudades para consultar el clima
+            time.sleep(1)  # Pausa para mejor visualización entre lotes
+
+# Función para iniciar el proceso de consulta de clima
+def iniciar_consulta():
     ciudades = ["Madrid", "London", "Tokyo", "New York", "Paris", "Mexico City", "Berlin", "Sydney", "Moscow", "Rio de Janeiro", "Cairo", "Istanbul", "Cape Town", "Seoul", "Mumbai", "Bangkok", "Beijing", "Jakarta", "Lima", "Buenos Aires", "Santiago", "Toronto", "Los Angeles", "Chicago", "Miami", "Houston", "Dallas", "Phoenix", "Las Vegas", "San Francisco", "Seattle", "Vancouver", "Montreal", "Havana", "San Juan", "Santo Domingo", "Bogota", "Caracas", "Quito", "Lisbon", "Barcelona", "Rome", "Berlin", "Amsterdam", "Brussels", "Vienna", "Zurich", "Stockholm", "Oslo", "Helsinki", "Copenhagen", "Warsaw", "Prague", "Budapest", "Athens", "Istanbul", "Moscow", "Dubai", "Riyadh", "Cairo", "Cape Town", "Nairobi", "Mumbai", "Bangkok", "Singapore", "Kuala Lumpur", "Jakarta", "Manila", "Sydney", "Auckland", "Tokyo", "Seoul", "Beijing", "Shanghai", "Hong Kong", "Taipei", "Hanoi", "Ho Chi Minh City", "Phnom Penh", "Yangon", "Kathmandu", "New Delhi", "Karachi", "Mumbai", "Colombo", "Dhaka", "Tehran", "Baghdad", "Riyadh", "Ankara", "Cairo", "Casablanca", "Johannesburg", "Lagos", "Kinshasa", "Nairobi", "Addis Ababa", "Khartoum", "Tunis", "Algiers", "Tripoli", "Rabat", "Accra", "Abidjan", "Dakar", "Monrovia", "Conakry", "Freetown", "Banjul", "Bissau", "Praia", "Nouakchott", "Bamako", "Niamey", "Ouagadougou", "Lome", "Cotonou", "Yaounde", "Bangui", "N'Djamena", "Khartoum", "Kigali", "Bujumbura", "Kampala", "Nairobi", "Dodoma", "Lilongwe", "Lusaka", "Harare", "Gaborone", "Windhoek"]
+    api_key = api_key_entry.get().strip()
 
-    # Clave de API de OpenWeather
-    api_key = "09ddf27515955d434f1b87845ee7dd3d"  # Debes colocar tu clave de API de OpenWeather
+    if not api_key:
+        messagebox.showerror("Error", "Por favor, introduce una clave de API válida.")
+        return
 
     start_time = time.time()
-    realizar_peticiones_por_lotes(ciudades, api_key)
-    print(f"\n\033[93mTerminado en {time.time() - start_time:.2f} segundos\033[0m")
+    realizar_peticiones_por_lotes(ciudades, api_key, output_text)
+    output_text.insert(tk.END, f"\nTerminado en {time.time() - start_time:.2f} segundos\n")
+    output_text.see(tk.END)  # Desplazarse hacia abajo al final
+
+# Crear la ventana principal
+root = tk.Tk()
+root.title("Consulta de Clima")
+
+# Crear un frame para la entrada de API Key
+frame = tk.Frame(root)
+frame.pack(pady=10)
+
+api_key_label = tk.Label(frame, text="Clave de API:")
+api_key_label.pack(side=tk.LEFT)
+
+api_key_entry = tk.Entry(frame)
+api_key_entry.pack(side=tk.LEFT)
+
+start_button = tk.Button(root, text="Iniciar Consulta", command=iniciar_consulta)
+start_button.pack(pady=10)
+
+# Widget de texto para mostrar resultados
+output_text = scrolledtext.ScrolledText(root, width=80, height=20)
+output_text.pack(pady=10)
+
+# Ejecutar la aplicación
+root.mainloop()
